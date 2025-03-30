@@ -45,7 +45,7 @@ export default function ProductDetails() {
   const fetchProductDetails = async () => {
     try {
       console.log('Fetching product details for:', productId);
-      const response = await fetch(`http://192.168.1.7:5000/api/v1/products/${productId}`);
+      const response = await fetch(`https://manavcreationbackend.onrender.com/api/v1/products/${productId}`);
       const data = await response.json();
       console.log('Product details response:', data);
       if (data.success) {

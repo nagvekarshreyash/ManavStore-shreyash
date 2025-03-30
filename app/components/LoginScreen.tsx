@@ -17,7 +17,7 @@ interface LoginScreenProps {
   onSignupPress: () => void;
 }
 
-const API_URL = 'http://192.168.1.7:5000/api/v1/auth';
+const API_URL = 'https://manavcreationbackend.onrender.com/api/v1/auth';
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onSignupPress }) => {
   const [showPassword, setShowPassword] = useState(false);

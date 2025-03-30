@@ -100,7 +100,7 @@ export default function Products() {
   const fetchProducts = async () => {
     try {
       console.log('Fetching products for category:', categoryId);
-      const response = await fetch(`http://192.168.1.7:5000/api/v1/products/category/${categoryId}`);
+      const response = await fetch(`https://manavcreationbackend.onrender.com/api/v1/products/category/${categoryId}`);
       const data = await response.json();
       console.log('Products response:', data);
       if (data.success) {

@@ -65,7 +65,7 @@ export default function Material() {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('http://192.168.1.7:5000/api/v1/categories');
+      const response = await fetch('https://manavcreationbackend.onrender.com/api/v1/categories');
       const data = await response.json();
       if (data.success) {
         setCategories(data.data);
