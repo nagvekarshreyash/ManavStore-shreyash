@@ -5,10 +5,14 @@ import React, { useState, useEffect } from 'react';
 import Header from '../../components/Header';
 import TabBar from '@/app/components/TabBar';
 
+// Update the Product interface to match backend schema
 interface Product {
   _id: string;
   name: string;
-  description: string;
+  category: {
+    _id: string;
+    name: string;
+  };
   prices: {
     resellerPrice: number;
     specialPrice: number;
@@ -16,10 +20,14 @@ interface Product {
     regularPrice: number;
   };
   colors: Array<{
+    _id: string;
     colorName: string;
     images: string[];
   }>;
+  pdfLink: string;
+  description: string;
   isActive: boolean;
+  createdAt: string;
 }
 
 export default function ProductDetails() {
@@ -36,8 +44,10 @@ export default function ProductDetails() {
 
   const fetchProductDetails = async () => {
     try {
+      console.log('Fetching product details for:', productId);
       const response = await fetch(`http://192.168.1.7:5000/api/v1/products/${productId}`);
       const data = await response.json();
+      console.log('Product details response:', data);
       if (data.success) {
         setProduct(data.data);
       }
@@ -70,6 +80,64 @@ export default function ProductDetails() {
     );
   }
 
+  const getCurrentPrice = () => {
+    if (!product) return '₹0';
+    return `₹${product.prices.regularPrice}`;
+  };
+
+  // Update the thumbnail section to use actual product images
+  const renderThumbnails = () => {
+    if (!product || !product.colors[selectedColor]) return null;
+    
+    return (
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={styles.thumbnailScroll}
+        contentContainerStyle={styles.thumbnailScrollContent}
+      >
+        {product.colors[selectedColor].images.map((image, index) => (
+          <TouchableOpacity 
+            key={index} 
+            style={styles.thumbnailContainer}
+            activeOpacity={0.7}
+          >
+            <Image 
+              source={{ uri: image }}
+              style={styles.thumbnail}
+              resizeMode="cover"
+            />
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    );
+  };
+
+  // Update the color options section
+  const renderColorOptions = () => {
+    if (!product) return null;
+
+    return (
+      <>
+        <Text style={styles.sectionTitle}>Colour</Text>
+        <View style={styles.colorOptions}>
+          {product.colors.map((color, index) => (
+            <TouchableOpacity
+              key={index}
+              style={[
+                styles.colorOption,
+                selectedColor === index && styles.selectedColor,
+              ]}
+              onPress={() => setSelectedColor(index)}
+            >
+              <Text style={styles.colorName}>{color.colorName}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
@@ -82,126 +150,58 @@ export default function ProductDetails() {
       >
         <View style={styles.mainImageContainer}>
           <Image 
-            source={{ uri: product.colors[selectedColor]?.images[0] }}
+            source={{ uri: product?.colors[selectedColor]?.images[0] }}
             style={styles.mainImage}
             resizeMode="cover"
           />
         </View>
 
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          style={styles.thumbnailScroll}
-          contentContainerStyle={styles.thumbnailScrollContent}
-        >
-          {[1, 2, 3, 4].map((item) => (
-            <TouchableOpacity 
-              key={item} 
-              style={styles.thumbnailContainer}
-              activeOpacity={0.7}
-            >
-              <Image 
-                source={require('../../../assets/images/favicon.png')}
-                style={styles.thumbnail}
-                resizeMode="cover"
-              />
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        {renderThumbnails()}
 
         <View style={styles.productInfo}>
-          <Text style={styles.productName}>{product?.name || 'Product Name'}</Text>
-          <View style={styles.ratingContainer}>
-            <View style={styles.ratingStars}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Ionicons 
-                  key={star} 
-                  name={star <= (product?.rating || 0) ? "star" : "star-outline"} 
-                  size={18} 
-                  color="#FFD700" 
-                  style={styles.starIcon}
-                />
-              ))}
-            </View>
-            <Text style={styles.rating}>
-              {product?.rating || 0} 
-              <Text style={styles.reviewCount}>({product?.reviews || 0} Reviews)</Text>
-            </Text>
-          </View>
+          <Text style={styles.productName}>{product?.name}</Text>
+          <Text style={styles.categoryName}>{product?.category?.name}</Text>
 
           <View style={styles.priceSection}>
-            <Text style={styles.price}>
-              {getCurrentPrice()}
-              <Text style={styles.perUnit}>/piece</Text>
-            </Text>
+            <View>
+              <Text style={styles.price}>{getCurrentPrice()}</Text>
+              {product?.prices.mrp > product?.prices.regularPrice && (
+                <Text style={styles.mrpPrice}>MRP: ₹{product?.prices.mrp}</Text>
+              )}
+            </View>
             <View style={styles.stockStatus}>
-              <View style={styles.stockDot} />
-              <Text style={styles.stockText}>{product?.inStock ? 'In Stock' : 'Out of Stock'}</Text>
+              <View style={[styles.stockDot, { backgroundColor: product?.isActive ? '#4CAF50' : '#FF0000' }]} />
+              <Text style={[styles.stockText, { color: product?.isActive ? '#4CAF50' : '#FF0000' }]}>
+                {product?.isActive ? 'In Stock' : 'Out of Stock'}
+              </Text>
             </View>
           </View>
 
-          <Text style={styles.sectionTitle}>Colour</Text>
-          <View style={styles.colorOptions}>
-            {product?.colors?.map((color, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.colorOption,
-                  { backgroundColor: color },
-                  selectedColor === index && styles.selectedColor,
-                ]}
-                onPress={() => setSelectedColor(index)}
-              />
-            ))}
-          </View>
-
-          <Text style={styles.sectionTitle}>Size</Text>
-          <View style={styles.sizeOptions}>
-            {product?.sizes?.map((size, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.sizeOption,
-                  selectedSize === index && styles.selectedSize,
-                ]}
-                onPress={() => setSelectedSize(index)}
-              >
-                <Text style={[
-                  styles.sizeText,
-                  selectedSize === index && styles.selectedSizeText
-                ]}>{size}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {renderColorOptions()}
 
           <Text style={styles.sectionTitle}>Description</Text>
-          <Text style={styles.description}>
-            High-quality pure cotton fabric, perfect for comfortable wear. Premium material
-            that ensures durability and style. Our cotton is sourced from the finest mills
-            to ensure superior quality and comfort.
-          </Text>
+          <Text style={styles.description}>{product?.description}</Text>
         </View>
       </ScrollView>
 
       <View style={styles.bottomBar}>
-        <View style={styles.priceContainer}>
-        </View>
         <TouchableOpacity 
           style={styles.shareButton}
           activeOpacity={0.7}
-          onPress={handleShare}
+          onPress={() => {
+            // Implement share functionality
+          }}
         >
           <Ionicons name="share-social-outline" size={22} color="#fff" style={styles.shareIcon} />
           <Text style={styles.shareText}>Share</Text>
         </TouchableOpacity>
       </View>
-<TabBar/>
-
+      <TabBar/>
     </SafeAreaView>
   );
 }
 
-// Add to your styles
+// Add these new styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,

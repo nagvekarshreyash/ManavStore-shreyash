@@ -85,14 +85,24 @@ export default function Products() {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Add handleProductPress function
+  const handleProductPress = (productId: string) => {
+    router.push({
+      pathname: '/screens/screen4/productDetails',
+      params: { productId }
+    });
+  };
+
   useEffect(() => {
     fetchProducts();
   }, [categoryId]);
 
   const fetchProducts = async () => {
     try {
+      console.log('Fetching products for category:', categoryId);
       const response = await fetch(`http://192.168.1.7:5000/api/v1/products/category/${categoryId}`);
       const data = await response.json();
+      console.log('Products response:', data);
       if (data.success) {
         setProducts(data.data);
       }
@@ -103,12 +113,29 @@ export default function Products() {
     }
   };
 
-  const handleProductPress = (productId: string) => {
-    router.push({
-      pathname: '/screens/screen4/productDetails',
-      params: { productId, categoryId }
-    });
-  };
+  // Add loading state UI
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Header showBackButton title="Products" />
+        <View style={styles.loadingContainer}>
+          <Text>Loading products...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Add empty state UI
+  if (!products || products.length === 0) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Header showBackButton title="Products" />
+        <View style={styles.loadingContainer}>
+          <Text>No products found for this category</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -161,6 +188,7 @@ export default function Products() {
   );
 }
 
+// Add to styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
