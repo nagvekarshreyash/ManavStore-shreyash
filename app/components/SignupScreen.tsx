@@ -12,20 +12,21 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-interface LoginScreenProps {
-  onLogin: () => void;
-  onSignupPress: () => void;
+interface SignupScreenProps {
+  onSignup: () => void;
+  onLoginPress: () => void;
 }
 
 const API_URL = 'http://192.168.1.7:5000/api/v1/auth';
 
-const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onSignupPress }) => {
+const SignupScreen: React.FC<SignupScreenProps> = ({ onSignup, onLoginPress }) => {
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
+    name: '',
     email: '',
     password: '',
   });
-  const [isLoading, setIsLoading] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -52,15 +53,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onSignupPress }) => 
     }));
   };
 
-  const handleLogin = async () => {
+  const handleSignup = async () => {
     try {
-      if (!formData.email || !formData.password) {
-        Alert.alert('Error', 'Please fill in all fields');
-        return;
-      }
-
       setIsLoading(true);
-      const response = await fetch(`${API_URL}/login`, {
+      const response = await fetch(`${API_URL}/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -71,19 +67,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onSignupPress }) => 
       const data = await response.json();
 
       if (data.success) {
-        Alert.alert('Success', 'Welcome to ManavStore');
-        onLogin();
+        Alert.alert('Success', 'Account created successfully');
+        onSignup();
       } else {
-        let errorMessage = 'Invalid credentials';
-        if (data.error === 'User not found') {
-          errorMessage = 'No account found with this email';
-        } else if (data.error === 'Invalid credentials') {
-          errorMessage = 'Incorrect password. Please try again';
-        }
-        Alert.alert('Login Failed', errorMessage);
+        Alert.alert('Signup Failed', data.error || 'Could not create account');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to connect to the server. Please try again later.');
+      Alert.alert('Error', 'Failed to connect to the server');
     } finally {
       setIsLoading(false);
     }
@@ -104,11 +94,26 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onSignupPress }) => 
         ]}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>Welcome to ManavStore</Text>
-          <Text style={styles.subtitle}>Sign in to continue shopping</Text>
+          <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.subtitle}>Join ManavStore today</Text>
         </View>
 
         <View style={styles.form}>
+          <View style={styles.inputContainer}>
+            <Ionicons
+              name="person-outline"
+              size={18}
+              color="#666"
+              style={styles.inputIcon}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Full Name"
+              value={formData.name}
+              onChangeText={(value) => handleInputChange('name', value)}
+            />
+          </View>
+
           <View style={styles.inputContainer}>
             <Ionicons
               name="mail-outline"
@@ -153,13 +158,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onSignupPress }) => 
           </View>
 
           <TouchableOpacity
-            style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
-            onPress={handleLogin}
+            style={[styles.signupButton, isLoading && styles.signupButtonDisabled]}
+            onPress={handleSignup}
             activeOpacity={0.9}
             disabled={isLoading}
           >
-            <Text style={styles.loginButtonText}>
-              {isLoading ? 'Signing In...' : 'Sign In'}
+            <Text style={styles.signupButtonText}>
+              {isLoading ? 'Creating Account...' : 'Create Account'}
             </Text>
             {!isLoading && <Ionicons name="arrow-forward" size={18} color="white" />}
           </TouchableOpacity>
@@ -167,9 +172,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onSignupPress }) => 
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            Don't have an account?{' '}
-            <Text style={styles.signUpLink} onPress={onSignupPress}>
-              Sign Up
+            Already have an account?{' '}
+            <Text style={styles.loginLink} onPress={onLoginPress}>
+              Sign In
             </Text>
           </Text>
         </View>
@@ -181,7 +186,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onSignupPress }) => 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5', // manav-cream color
+    backgroundColor: '#F5F5F5',
   },
   content: {
     flex: 1,
@@ -195,20 +200,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333', // manav-text-dark
+    color: '#333',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#666', // manav-text-light
-    marginBottom: 8,
-  },
-  demoText: {
-    fontSize: 12,
     color: '#666',
-  },
-  demoCredentials: {
-    fontWeight: '600',
+    marginBottom: 8,
   },
   form: {
     width: '100%',
@@ -235,8 +233,8 @@ const styles = StyleSheet.create({
   eyeIcon: {
     padding: 8,
   },
-  loginButton: {
-    backgroundColor: '#FF0000', // manav-red
+  signupButton: {
+    backgroundColor: '#FF0000',
     borderRadius: 25,
     paddingVertical: 16,
     flexDirection: 'row',
@@ -245,17 +243,13 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 8,
   },
-  loginButtonText: {
+  signupButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '500',
   },
-  demoButton: {
-    color: '#FF0000', // manav-red
-    fontSize: 14,
-    fontWeight: '500',
-    textAlign: 'center',
-    marginTop: 16,
+  signupButtonDisabled: {
+    opacity: 0.7,
   },
   footer: {
     marginTop: 32,
@@ -265,13 +259,10 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 14,
   },
-  signUpLink: {
-    color: '#FF0000', // manav-red
+  loginLink: {
+    color: '#FF0000',
     fontWeight: '500',
-  },
-  loginButtonDisabled: {
-    opacity: 0.7,
   },
 });
 
-export default LoginScreen;
+export default SignupScreen;

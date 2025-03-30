@@ -1,7 +1,7 @@
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, StatusBar, SafeAreaView, Image, Platform, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from '../../components/Header';
 import SearchBar from '../../components/SearchBar';
 
@@ -61,14 +61,52 @@ export const products = [
 
 
 
+interface Product {
+  _id: string;
+  name: string;
+  category: string;
+  prices: {
+    resellerPrice: number;
+    specialPrice: number;
+    mrp: number;
+    regularPrice: number;
+  };
+  colors: Array<{
+    colorName: string;
+    images: string[];
+  }>;
+  description: string;
+  isActive: boolean;
+}
+
 export default function Products() {
   const router = useRouter();
-  const { materialId } = useLocalSearchParams();
+  const { categoryId } = useLocalSearchParams();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleProductPress = (productId: number) => {
+  useEffect(() => {
+    fetchProducts();
+  }, [categoryId]);
+
+  const fetchProducts = async () => {
+    try {
+      const response = await fetch(`http://192.168.1.7:5000/api/v1/products/category/${categoryId}`);
+      const data = await response.json();
+      if (data.success) {
+        setProducts(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleProductPress = (productId: string) => {
     router.push({
       pathname: '/screens/screen4/productDetails',
-      params: { productId, materialId }
+      params: { productId, categoryId }
     });
   };
 
@@ -80,7 +118,9 @@ export default function Products() {
       <View style={styles.mainContent}>
         <SearchBar 
           placeholder="Search products..."
-          containerStyle={styles.searchBarContainer}
+          style={styles.searchBarContainer}
+          onSearchPress={() => console.log('Search')}
+          onFilterPress={() => console.log('Filter')}
         />
 
         <ScrollView 
@@ -90,66 +130,27 @@ export default function Products() {
         >
           {products.map((product) => (
             <TouchableOpacity
-              key={product.id}
+              key={product._id}
               style={styles.productCard}
-              onPress={() => handleProductPress(product.id)}
+              onPress={() => handleProductPress(product._id)}
               activeOpacity={0.7}
             >
               <View style={styles.imageContainer}>
                 <Image 
-                  source={product.images[Object.keys(product.images)[0]]} // Get first image from images object
+                  source={{ uri: product.colors[0].images[0] }}
                   style={styles.productImage}
                   resizeMode="cover"
                 />
-                {product.discount && (
-                  <View style={styles.discountBadge}>
-                    <Text style={styles.discountText}>-{product.discount}</Text>
-                  </View>
-                )}
-                {product.isNew && (
-                  <View style={styles.newBadge}>
-                    <Text style={styles.newText}>NEW</Text>
-                  </View>
-                )}
-                <TouchableOpacity style={styles.favoriteButton}>
-                  <Ionicons name="heart-outline" size={20} color="#FF0000" />
-                </TouchableOpacity>
               </View>
-              
               <View style={styles.productInfo}>
                 <Text style={styles.productName} numberOfLines={1}>
                   {product.name}
                 </Text>
-                <Text style={styles.materialName}>{product.materialName}</Text>
-                
-                <View style={styles.ratingContainer}>
-                  <View style={styles.stars}>
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <Ionicons 
-                        key={star}
-                        name={star <= product.rating ? "star" : "star-outline"}
-                        size={14}
-                        color="#FFD700"
-                        style={styles.starIcon}
-                      />
-                    ))}
-                  </View>
-                  <Text style={styles.rating}>({product.reviews})</Text>
-                </View>
-
-                <View style={styles.bottomRow}>
-                  <View style={styles.priceContainer}>
-                    <Text style={styles.price}>{product.price}</Text>
-                    {product.originalPrice && (
-                      <Text style={styles.originalPrice}>{product.originalPrice}</Text>
-                    )}
-                  </View>
-                  <TouchableOpacity 
-                    style={styles.addButton}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.addButtonText}>Add</Text>
-                  </TouchableOpacity>
+                <View style={styles.priceContainer}>
+                  <Text style={styles.price}>₹{product.prices.regularPrice}</Text>
+                  {product.prices.mrp > product.prices.regularPrice && (
+                    <Text style={styles.originalPrice}>₹{product.prices.mrp}</Text>
+                  )}
                 </View>
               </View>
             </TouchableOpacity>
@@ -268,3 +269,11 @@ const styles = StyleSheet.create({
 
 // Remove this line
 // export default products;
+
+// Add SearchBar props interface
+interface SearchBarProps {
+  placeholder: string;
+  onSearchPress?: () => void;
+  onFilterPress?: () => void;
+  style?: any; // or use proper StyleProp<ViewStyle> if you want to be more specific
+}

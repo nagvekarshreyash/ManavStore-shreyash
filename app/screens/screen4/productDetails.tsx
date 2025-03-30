@@ -1,46 +1,73 @@
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, StatusBar, SafeAreaView, Image, Platform, GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from '../../components/Header';
-
-// Update the import to use named import
-import { products } from '../screen3/products';
 import TabBar from '@/app/components/TabBar';
 
-// Add share handler function near the top of the component
+interface Product {
+  _id: string;
+  name: string;
+  description: string;
+  prices: {
+    resellerPrice: number;
+    specialPrice: number;
+    mrp: number;
+    regularPrice: number;
+  };
+  colors: Array<{
+    colorName: string;
+    images: string[];
+  }>;
+  isActive: boolean;
+}
+
 export default function ProductDetails() {
   const router = useRouter();
-  const { materialId, productId } = useLocalSearchParams();
-  const [selectedSize, setSelectedSize] = useState(null);
+  const { productId } = useLocalSearchParams();
+  const [product, setProduct] = useState<Product | null>(null);
   const [selectedColor, setSelectedColor] = useState(0);
-  const [userType, setUserType] = useState('retail');
+  const [selectedSize, setSelectedSize] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Find the current product
-  // Add console logs to debug
-  console.log('ProductID:', productId);
-  console.log('Available Products:', products);
-  
-  const product = Array.isArray(products) ? products.find((p) => p.id === parseInt(productId as string)) : null;
-  
-  // Add console log to check found product
-  console.log('Found Product:', product);
+  useEffect(() => {
+    fetchProductDetails();
+  }, [productId]);
 
-  // Get current image based on selected color
-  const getCurrentImage = () => {
-    if (!product) return null;
-    const colorName = product.colorNames[selectedColor];
-    return product.images[colorName];
+  const fetchProductDetails = async () => {
+    try {
+      const response = await fetch(`http://192.168.1.7:5000/api/v1/products/${productId}`);
+      const data = await response.json();
+      if (data.success) {
+        setProduct(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching product details:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Get current price based on user type
-  const getCurrentPrice = () => {
-    if (!product) return '';
-    return product.prices[userType];
-  };
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Header showBackButton title="Product Details" />
+        <View style={styles.loadingContainer}>
+          <Text>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-  function handleShare(event: GestureResponderEvent): void {
-    throw new Error('Function not implemented.');
+  if (!product) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Header showBackButton title="Product Details" />
+        <View style={styles.loadingContainer}>
+          <Text>Product not found</Text>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -55,7 +82,7 @@ export default function ProductDetails() {
       >
         <View style={styles.mainImageContainer}>
           <Image 
-            source={getCurrentImage()}
+            source={{ uri: product.colors[selectedColor]?.images[0] }}
             style={styles.mainImage}
             resizeMode="cover"
           />
@@ -174,6 +201,7 @@ export default function ProductDetails() {
   );
 }
 
+// Add to your styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,

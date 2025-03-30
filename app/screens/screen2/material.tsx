@@ -5,6 +5,7 @@ import React from 'react';
 import Header from '../../components/Header';
 import SearchBar from '../../components/SearchBar';
 import TabBar from '../../components/TabBar';
+import { useState, useEffect } from 'react';
 
 const materials = [
   { 
@@ -46,14 +47,40 @@ const materials = [
   { id: 6, name: 'Sustainable Cotton', icon: 'leaf-outline' },
 ];
 
+interface Category {
+  _id: string;
+  name: string;
+  imageUrl: string;
+  description: string;
+}
+
 export default function Material() {
   const router = useRouter();
-  const { category, categoryId, subCategoryId, productId } = useLocalSearchParams();
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleMaterialPress = (materialId: number) => {
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch('http://192.168.1.7:5000/api/v1/categories');
+      const data = await response.json();
+      if (data.success) {
+        setCategories(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleMaterialPress = (categoryId: string) => {
     router.push({
       pathname: '/screens/screen3/products',
-      params: { materialId }
+      params: { categoryId }
     });
   };
 
@@ -72,49 +99,26 @@ export default function Material() {
         contentContainerStyle={styles.scrollViewContent}
       >
         <View style={styles.cardsContainer}>
-          {materials.map((material) => (
+          {categories.map((category) => (
             <TouchableOpacity 
-              key={material.id} 
+              key={category._id} 
               style={styles.materialCard}
               activeOpacity={0.9}
-              onPress={() => handleMaterialPress(material.id)}
+              onPress={() => handleMaterialPress(category._id)}
             >
               <View style={styles.cardContent}>
                 <View style={styles.imageContainer}>
                   <Image 
-                    source={material.image}
+                    source={{ uri: category.imageUrl }}
                     style={styles.materialImage}
                     resizeMode="cover"
                   />
                 </View>
                 <View style={styles.detailsContainer}>
-                  <Text style={styles.materialName}>{material.name}</Text>
-                  <Text style={styles.subtitle}>{material.subtitle}</Text>
+                  <Text style={styles.materialName}>{category.name}</Text>
                   <Text style={styles.description} numberOfLines={2}>
-                    {material.description}
+                    {category.description}
                   </Text>
-                  <View style={styles.footer}>
-                    <View style={styles.ratingContainer}>
-                      <Ionicons name="star" size={16} color="#FFD700" />
-                      <Text style={styles.ratingText}>
-                        {material.rating} ({material.reviews})
-                      </Text>
-                    </View>
-                    <View style={styles.priceContainer}>
-                      <Text style={styles.price}>{material.price}</Text>
-                      <View style={[
-                        styles.stockBadge, 
-                        { backgroundColor: material.inStock ? '#E8F5E9' : '#FFEBEE' }
-                      ]}>
-                        <Text style={[
-                          styles.stockText, 
-                          { color: material.inStock ? '#4CAF50' : '#FF5252' }
-                        ]}>
-                          {material.inStock ? 'In Stock' : 'Out of Stock'}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
                 </View>
               </View>
             </TouchableOpacity>

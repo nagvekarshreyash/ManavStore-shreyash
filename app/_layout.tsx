@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
@@ -9,25 +9,25 @@ import React from 'react';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import CustomSplashScreen from './components/SplashScreen';
 import LoginScreen from './components/LoginScreen';
+import SignupScreen from './components/SignupScreen';
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const router = useRouter();
   const [showCustomSplash, setShowCustomSplash] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authScreen, setAuthScreen] = useState<'login' | 'signup'>('login');
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
 
   useEffect(() => {
     if (loaded) {
-      console.log('Fonts loaded, showing splash screen');
       const splashTimeout = setTimeout(() => {
         setShowCustomSplash(false);
         SplashScreen.hideAsync();
-        console.log('Hiding splash screen');
       }, 5000);
 
       return () => clearTimeout(splashTimeout);
@@ -39,7 +39,20 @@ export default function RootLayout() {
   }
 
   if (!isLoggedIn) {
-    return <LoginScreen onLogin={() => setIsLoggedIn(true)} />;
+    if (authScreen === 'login') {
+      return (
+        <LoginScreen
+          onLogin={() => setIsLoggedIn(true)}
+          onSignupPress={() => setAuthScreen('signup')}
+        />
+      );
+    }
+    return (
+      <SignupScreen
+        onSignup={() => setIsLoggedIn(true)}
+        onLoginPress={() => setAuthScreen('login')}
+      />
+    );
   }
 
   return (
