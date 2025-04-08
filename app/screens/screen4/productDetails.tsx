@@ -1,5 +1,5 @@
 // Add Share to the imports at the top
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, StatusBar, SafeAreaView, Image, Platform, GestureResponderEvent, Share } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, StatusBar, SafeAreaView, Image, Platform, GestureResponderEvent, Share, Animated } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,12 +7,9 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useState, useEffect } from 'react';
 import Header from '../../components/Header';
 import TabBar from '@/app/components/TabBar';
-// Remove this line
-// import { Share } from 'react-native';
-import RNShare from 'react-native-share';
-
-// Add to imports at the top
 import { Modal } from 'react-native';
+import { captureRef } from 'react-native-view-shot';
+import { useRef } from 'react';
 
 // Update the Product interface to match backend schema
 interface Product {
@@ -43,12 +40,16 @@ interface Product {
 export default function ProductDetails() {
   const router = useRouter();
   const { productId } = useLocalSearchParams();
+  const imageRef = useRef(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
   const [product, setProduct] = useState<Product | null>(null);
   const [selectedColor, setSelectedColor] = useState(0);
   const [selectedSize, setSelectedSize] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  // Add these new states
   const [showShareModal, setShowShareModal] = useState(false);
+  const [isFloatingButtonVisible, setIsFloatingButtonVisible] = useState(true);
+  const lastScrollY = useRef(0);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [shareOptions, setShareOptions] = useState({
     productName: true,
     price: true,
@@ -56,6 +57,31 @@ export default function ProductDetails() {
     image: true,
     category: true,
     color: true,
+  });
+
+  // Add the missing handleScroll function
+  const handleScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    { 
+      useNativeDriver: false,
+      listener: (event) => {
+        const currentScrollY = event.nativeEvent.contentOffset.y;
+        setIsFloatingButtonVisible(
+          currentScrollY < lastScrollY.current || 
+          currentScrollY < 50 ||
+          currentScrollY + event.nativeEvent.layoutMeasurement.height >= 
+          event.nativeEvent.contentSize.height - 20
+        );
+        lastScrollY.current = currentScrollY;
+      }
+    }
+  );
+
+  // Calculate opacity for floating button
+  const floatingButtonOpacity = scrollY.interpolate({
+    inputRange: [0, 50, 100],
+    outputRange: [0, 0.8, 1],
+    extrapolate: 'clamp'
   });
 
   useEffect(() => {
@@ -227,70 +253,116 @@ export default function ProductDetails() {
     </Modal>
   );
 
-  // Update handleShare function
-  const handleShare = async () => {
-    if (!product) return;
-  
-    try {
-      let shareContent = 'Check out this product from Manav Creation!\n\n';
+  const shareDetails = async () => {
+      if (!product) return;
+      console.log('Starting text share process...');
       
-      if (shareOptions.productName) {
-        shareContent += `${product.name}\n`;
-      }
-      
-      if (shareOptions.category) {
-        shareContent += `${product.category.name}\n`;
-      }
-      
-      if (shareOptions.price) {
-        const discountPercentage = product.prices.mrp > product.prices.regularPrice 
-          ? Math.round((1 - product.prices.regularPrice/product.prices.mrp) * 100)
-          : 0;
-        shareContent += `Price: ₹${product.prices.regularPrice}\n`;
-        if (discountPercentage > 0) {
-          shareContent += `MRP: ₹${product.prices.mrp} (${discountPercentage}% OFF!)\n`;
+      let shareContent = '';
+      try {
+        console.log('Building share content...');
+        shareContent = 'Check out this product from Manav Creation!\n\n';
+        
+        const productLink = `https://manavcreation.com/product/${product._id}`;
+        shareContent += `${productLink}\n\n`;
+        
+        if (shareOptions.productName) {
+          console.log('Adding product name...');
+          shareContent += `${product.name}\n`;
         }
-      }
-      
-      if (shareOptions.color) {
-        shareContent += `Color: ${product.colors[selectedColor]?.colorName}\n`;
-      }
-      
-      if (shareOptions.description) {
-        shareContent += `\n${product.description}\n`;
-      }
-      
-      shareContent += `\nView product at:\nhttps://manavcreation.com/products/${product._id}`;
-  
-      const imageUrl = shareOptions.image ? product.colors[selectedColor]?.images[0] : null;
-      
-      if (Platform.OS === 'ios') {
+        if (shareOptions.category) {
+          console.log('Adding category...');
+          shareContent += `Category: ${product.category.name}\n`;
+        }
+        if (shareOptions.price) {
+          console.log('Adding price details...');
+          shareContent += `Price: ₹${product.prices.regularPrice}\n`;
+          if (product.prices.mrp > product.prices.regularPrice) {
+            const discount = Math.round((1 - product.prices.regularPrice/product.prices.mrp) * 100);
+            shareContent += `MRP: ₹${product.prices.mrp} (${discount}% OFF!)\n`;
+          }
+        }
+        if (shareOptions.color) {
+          console.log('Adding color info...');
+          shareContent += `Color: ${product.colors[selectedColor]?.colorName}\n`;
+        }
+        if (shareOptions.description) {
+          console.log('Adding description...');
+          shareContent += `\nDescription:\n${product.description}\n`;
+        }
+
+        console.log('Sharing text content...');
         await Share.share({
           message: shareContent,
-          url: imageUrl, // iOS uses url for image sharing
         });
-      } else {
-        // For Android
-        if (imageUrl) {
-          // Download image first for Android
-          const localFile = `${FileSystem.cacheDirectory}share_image.jpg`;
-          await FileSystem.downloadAsync(imageUrl, localFile);
-          
-          await Share.share({
-            message: shareContent,
-            url: `file://${localFile}`, // Android needs file:// protocol
-          });
-        } else {
-          await Share.share({
-            message: shareContent,
-          });
-        }
+        console.log('Text content shared successfully!');
+      } catch (error) {
+        console.error('Text sharing failed:', error);
       }
+    };
+
+  const shareImage = async () => {
+    if (!product || !shareOptions.image) return;
+    console.log('Starting image share process...');
+
+    try {
+      const imageUrl = product.colors[selectedColor]?.images[selectedImageIndex];
+      if (!imageUrl) {
+        console.log('No image URL available');
+        return;
+      }
+      console.log('Image URL:', imageUrl);
+
+      const localImagePath = `${FileSystem.cacheDirectory}share-image.jpg`;
+      console.log('Downloading image to:', localImagePath);
+      
+      const { uri: downloadedUri } = await FileSystem.downloadAsync(
+        imageUrl,
+        localImagePath
+      );
+      console.log('Image downloaded successfully to:', downloadedUri);
+
+      const isSharingAvailable = await Sharing.isAvailableAsync();
+      console.log('Sharing availability:', isSharingAvailable);
+
+      if (isSharingAvailable) {
+        console.log('Sharing image...');
+        await Sharing.shareAsync(downloadedUri, {
+          mimeType: 'image/jpeg',
+          dialogTitle: 'Share Product Image'
+        });
+        console.log('Image shared successfully!');
+      }
+
+      console.log('Cleaning up temporary files...');
+      await FileSystem.deleteAsync(localImagePath, { idempotent: true });
+      console.log('Temporary files cleaned up');
     } catch (error) {
-      console.error('Error sharing:', error);
-      alert('Failed to share product. Please try again.');
+      console.error('Image sharing failed:', error);
     }
   };
+
+  const handleShare = async () => {
+    console.log('Starting share process...');
+    if (!product) {
+      console.log('No product data available');
+      return;
+    }
+
+    try {
+      if (shareOptions.image) {
+        console.log('Image sharing selected');
+        await shareImage();
+      }
+      console.log('Starting text sharing');
+      await shareDetails();
+      console.log('Share process completed!');
+    } catch (error) {
+      console.error('Share process failed:', error);
+    }
+  };
+
+
+  
 
   // Update the share button onPress in the return statement
   <View style={styles.bottomBar}>
@@ -310,17 +382,26 @@ export default function ProductDetails() {
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       <Header showBackButton title="Product Details" />
       
-      <ScrollView 
+      <Animated.ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
       >
-        <View style={styles.mainImageContainer}>
+        <View style={styles.mainImageContainer} ref={imageRef}>
           <Image 
-            source={{ uri: product?.colors[selectedColor]?.images[0] }}
+            source={{ uri: product?.colors[selectedColor]?.images[selectedImageIndex] }}
             style={styles.mainImage}
             resizeMode="cover"
           />
+          {product.prices.mrp > product.prices.regularPrice && (
+            <View style={styles.discountBadge}>
+              <Text style={styles.discountText}>
+                {Math.round((1 - product.prices.regularPrice/product.prices.mrp) * 100)}% OFF
+              </Text>
+            </View>
+          )}
         </View>
 
         {renderThumbnails()}
@@ -349,8 +430,9 @@ export default function ProductDetails() {
           <Text style={styles.sectionTitle}>Description</Text>
           <Text style={styles.description}>{product?.description}</Text>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
 
+      {/* Bottom Bar */}
       <View style={styles.bottomBar}>
         <TouchableOpacity 
           style={styles.shareButton}
@@ -361,6 +443,27 @@ export default function ProductDetails() {
           <Text style={styles.shareText}>Share</Text>
         </TouchableOpacity>
       </View>
+      
+      {/* Floating Share Button (Flipkart style) */}
+      <Animated.View 
+        style={[
+          styles.floatingShareButton, 
+          { 
+            opacity: isFloatingButtonVisible ? 1 : 0,
+            transform: [{ scale: isFloatingButtonVisible ? 1 : 0.8 }]
+          }
+        ]}
+        pointerEvents={isFloatingButtonVisible ? 'auto' : 'none'}
+      >
+        <TouchableOpacity
+          style={styles.floatingButtonTouchable}
+          activeOpacity={0.7}
+          onPress={() => setShowShareModal(true)}
+        >
+          <Ionicons name="share-social" size={24} color="#fff" />
+        </TouchableOpacity>
+      </Animated.View>
+      
       <ShareOptionsModal />
       <TabBar/>
     </SafeAreaView>
