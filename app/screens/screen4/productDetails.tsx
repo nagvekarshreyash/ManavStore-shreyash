@@ -1,15 +1,13 @@
-// Add Share to the imports at the top
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, StatusBar, SafeAreaView, Image, Platform, GestureResponderEvent, Share, Animated } from 'react-native';
+// Consolidate imports at the top
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, StatusBar, SafeAreaView, Image, Platform, Animated, Modal } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Header from '../../components/Header';
 import TabBar from '@/app/components/TabBar';
-import { Modal } from 'react-native';
-import { captureRef } from 'react-native-view-shot';
-import { useRef } from 'react';
+import { Share } from 'react-native';
 
 // Update the Product interface to match backend schema
 interface Product {
@@ -36,20 +34,21 @@ interface Product {
   createdAt: string;
 }
 
-// Add state declarations at the top of the component
 export default function ProductDetails() {
   const router = useRouter();
   const { productId } = useLocalSearchParams();
   const imageRef = useRef(null);
   const scrollY = useRef(new Animated.Value(0)).current;
+  const lastScrollY = useRef(0);
   const [product, setProduct] = useState<Product | null>(null);
   const [selectedColor, setSelectedColor] = useState(0);
   const [selectedSize, setSelectedSize] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [isFloatingButtonVisible, setIsFloatingButtonVisible] = useState(true);
-  const lastScrollY = useRef(0);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isFloatingButtonVisible, setIsFloatingButtonVisible] = useState(true);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [selectedPhotos, setSelectedPhotos] = useState<{ [key: string]: boolean }>({});
   const [shareOptions, setShareOptions] = useState({
     productName: true,
     price: true,
@@ -105,102 +104,57 @@ export default function ProductDetails() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <Header showBackButton title="Product Details" />
-        <View style={styles.loadingContainer}>
-          <Text>Loading...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!product) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <Header showBackButton title="Product Details" />
-        <View style={styles.loadingContainer}>
-          <Text>Product not found</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  const getCurrentPrice = () => {
-    if (!product) return '₹0';
-    return `₹${product.prices.regularPrice}`;
-  };
-
-  // Update the thumbnail section to use actual product images
-  const renderThumbnails = () => {
-    if (!product || !product.colors[selectedColor]) return null;
-    
-    return (
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        style={styles.thumbnailScroll}
-        contentContainerStyle={styles.thumbnailScrollContent}
-      >
-        {product.colors[selectedColor].images.map((image, index) => (
-          <TouchableOpacity 
-            key={index} 
-            style={styles.thumbnailContainer}
-            activeOpacity={0.7}
-          >
-            <Image 
-              source={{ uri: image }}
-              style={styles.thumbnail}
-              resizeMode="cover"
-            />
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    );
-  };
-
-  // Update the color options section
-  // Update the renderColorOptions function
-  const renderColorOptions = () => {
-    if (!product) return null;
-  
-    return (
-      <>
-        <Text style={styles.sectionTitle}>Colour</Text>
-        <View style={styles.colorOptions}>
-          {product.colors.map((color, index) => (
+  // Add PhotoShareModal component inside the main component
+  const PhotoShareModal = () => (
+    <Modal
+      animationType="fade"
+      transparent={true}
+      visible={showPhotoModal}
+      onRequestClose={() => setShowPhotoModal(false)}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Select Photos to Share</Text>
+          <ScrollView>
+            {product?.colors[selectedColor]?.images.map((image, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.photoItem}
+                onPress={() => setSelectedPhotos(prev => ({...prev, [index]: !prev[index]}))}
+              >
+                <Image source={{ uri: image }} style={styles.photoPreview} />
+                <View style={[styles.photoCheckbox, selectedPhotos[index] && styles.photoCheckboxSelected]}>
+                  {selectedPhotos[index] && <Ionicons name="checkmark" size={18} color="#fff" />}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <View style={styles.modalButtons}>
             <TouchableOpacity
-              key={index}
-              style={[
-                styles.colorOption,
-                selectedColor === index && styles.selectedColor,
-              ]}
-              onPress={() => setSelectedColor(index)}
+              style={[styles.modalButton, styles.cancelButton]}
+              onPress={() => {
+                setShowPhotoModal(false);
+                setSelectedPhotos({});
+              }}
             >
-              <Image 
-                source={{ 
-                  uri: color.images?.[0] || null,
-                  // Add default image if the URL fails to load
-                  defaultSource: require('../../../assets/images/favicon.png')
-                }}
-                style={styles.colorImage}
-                resizeMode="cover"
-                // Add fallback for when image fails to load
-                onError={() => console.log(`Using fallback image for color: ${color.colorName}`)}
-              />
-              <Text style={styles.colorName}>{color.colorName || 'Color'}</Text>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
-          ))}
+            <TouchableOpacity
+              style={[styles.modalButton, styles.modalShareButton]}
+              onPress={handlePhotoShare}
+            >
+              <Text style={styles.modalShareButtonText}>Share Selected</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </>
-    );
-  };
+      </View>
+    </Modal>
+  );
 
-  // Add ShareOptionsModal component inside ProductDetails
+  // Add ShareOptionsModal component inside the main component
   const ShareOptionsModal = () => (
     <Modal
-  animationType="fade"
+      animationType="fade"
       transparent={true}
       visible={showShareModal}
       onRequestClose={() => setShowShareModal(false)}
@@ -253,52 +207,75 @@ export default function ProductDetails() {
     </Modal>
   );
 
-  const shareDetails = async () => {
-      if (!product) return;
-      console.log('Starting text share process...');
-      
-      let shareContent = '';
-      try {
-        console.log('Building share content...');
-        shareContent = 'Check out this product from Manav Creation!\n\n';
-        
-        const productLink = `https://manavcreation.com/product/${product._id}`;
-        shareContent += `${productLink}\n\n`;
-        
-        if (shareOptions.productName) {
-          console.log('Adding product name...');
-          shareContent += `${product.name}\n`;
-        }
-        if (shareOptions.category) {
-          console.log('Adding category...');
-          shareContent += `Category: ${product.category.name}\n`;
-        }
-        if (shareOptions.price) {
-          console.log('Adding price details...');
-          shareContent += `Price: ₹${product.prices.regularPrice}\n`;
-          if (product.prices.mrp > product.prices.regularPrice) {
-            const discount = Math.round((1 - product.prices.regularPrice/product.prices.mrp) * 100);
-            shareContent += `MRP: ₹${product.prices.mrp} (${discount}% OFF!)\n`;
-          }
-        }
-        if (shareOptions.color) {
-          console.log('Adding color info...');
-          shareContent += `Color: ${product.colors[selectedColor]?.colorName}\n`;
-        }
-        if (shareOptions.description) {
-          console.log('Adding description...');
-          shareContent += `\nDescription:\n${product.description}\n`;
-        }
+  // Add handlePhotoShare function
+  const handlePhotoShare = async () => {
+    try {
+      const selectedImages = Object.entries(selectedPhotos)
+        .filter(([_, isSelected]) => isSelected)
+        .map(([index]) => product?.colors[selectedColor]?.images[Number(index)]);
 
-        console.log('Sharing text content...');
-        await Share.share({
-          message: shareContent,
+      for (const imageUrl of selectedImages) {
+        const localImagePath = `${FileSystem.cacheDirectory}share-image-${Date.now()}.jpg`;
+        const { uri } = await FileSystem.downloadAsync(imageUrl, localImagePath);
+        await Sharing.shareAsync(uri, {
+          mimeType: 'image/jpeg',
+          dialogTitle: 'Share Product Image'
         });
-        console.log('Text content shared successfully!');
-      } catch (error) {
-        console.error('Text sharing failed:', error);
+        await FileSystem.deleteAsync(localImagePath, { idempotent: true });
       }
-    };
+      setShowPhotoModal(false);
+      setSelectedPhotos({});
+    } catch (error) {
+      console.error('Photo sharing failed:', error);
+    }
+  };
+
+  const shareDetails = async () => {
+    if (!product) return;
+    console.log('Starting text share process...');
+    
+    let shareContent = '';
+    try {
+      console.log('Building share content...');
+      shareContent = 'Check out this product from Manav Creation!\n\n';
+      
+      const productLink = `https://manavcreation.com/product/${product._id}`;
+      shareContent += `${productLink}\n\n`;
+      
+      if (shareOptions.productName) {
+        console.log('Adding product name...');
+        shareContent += `${product.name}\n`;
+      }
+      if (shareOptions.category) {
+        console.log('Adding category...');
+        shareContent += `Category: ${product.category.name}\n`;
+      }
+      if (shareOptions.price) {
+        console.log('Adding price details...');
+        shareContent += `Price: ₹${product.prices.regularPrice}\n`;
+        if (product.prices.mrp > product.prices.regularPrice) {
+          const discount = Math.round((1 - product.prices.regularPrice/product.prices.mrp) * 100);
+          shareContent += `MRP: ₹${product.prices.mrp} (${discount}% OFF!)\n`;
+        }
+      }
+      if (shareOptions.color) {
+        console.log('Adding color info...');
+        shareContent += `Color: ${product.colors[selectedColor]?.colorName}\n`;
+      }
+      if (shareOptions.description) {
+        console.log('Adding description...');
+        shareContent += `\nDescription:\n${product.description}\n`;
+      }
+
+      console.log('Sharing text content...');
+      await Share.share({
+        message: shareContent,
+      });
+      console.log('Text content shared successfully!');
+    } catch (error) {
+      console.error('Text sharing failed:', error);
+    }
+  };
 
   const shareImage = async () => {
     if (!product || !shareOptions.image) return;
@@ -361,22 +338,96 @@ export default function ProductDetails() {
     }
   };
 
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Header showBackButton title="Product Details" />
+        <View style={styles.loadingContainer}>
+          <Text>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
+  if (!product) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Header showBackButton title="Product Details" />
+        <View style={styles.loadingContainer}>
+          <Text>Product not found</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const getCurrentPrice = () => {
+    if (!product) return '₹0';
+    return `₹${product.prices.regularPrice}`;
+  };
+
+  // Update the thumbnail section to use actual product images
+  const renderThumbnails = () => {
+    if (!product || !product.colors[selectedColor]) return null;
+    
+    return (
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={styles.thumbnailScroll}
+        contentContainerStyle={styles.thumbnailScrollContent}
+      >
+        {product.colors[selectedColor].images.map((image, index) => (
+          <TouchableOpacity 
+            key={index} 
+            style={styles.thumbnailContainer}
+            activeOpacity={0.7}
+            onPress={() => setSelectedImageIndex(index)}
+          >
+            <Image 
+              source={{ uri: image }}
+              style={styles.thumbnail}
+              resizeMode="cover"
+            />
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    );
+  };
+
+  // Update the color options section
+  const renderColorOptions = () => {
+    if (!product) return null;
   
+    return (
+      <>
+        <Text style={styles.sectionTitle}>Colour</Text>
+        <View style={styles.colorOptions}>
+          {product.colors.map((color, index) => (
+            <TouchableOpacity
+              key={index}
+              style={[
+                styles.colorOption,
+                selectedColor === index && styles.selectedColor,
+              ]}
+              onPress={() => setSelectedColor(index)}
+            >
+              <Image 
+                source={{ 
+                  uri: color.images?.[0] || null,
+                  defaultSource: require('../../../assets/images/favicon.png')
+                }}
+                style={styles.colorImage}
+                resizeMode="cover"
+                onError={() => console.log(`Using fallback image for color: ${color.colorName}`)}
+              />
+              <Text style={styles.colorName}>{color.colorName || 'Color'}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </>
+    );
+  };
 
-  // Update the share button onPress in the return statement
-  <View style={styles.bottomBar}>
-    <TouchableOpacity 
-      style={styles.shareButton}
-      activeOpacity={0.7}
-      onPress={() => setShowShareModal(true)}
-    >
-      <Ionicons name="share-social-outline" size={22} color="#fff" style={styles.shareIcon} />
-      <Text style={styles.shareText}>Share</Text>
-    </TouchableOpacity>
-  </View>
-
-  // Add ShareOptionsModal to the return statement before closing SafeAreaView
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
@@ -435,47 +486,40 @@ export default function ProductDetails() {
       {/* Bottom Bar */}
       <View style={styles.bottomBar}>
         <TouchableOpacity 
-          style={styles.shareButton}
-          activeOpacity={0.7}
+          style={[styles.shareButton, { backgroundColor: '#4CAF50' }]}
+          onPress={() => setShowPhotoModal(true)}
+        >
+          <Ionicons name="images-outline" size={22} color="#fff" />
+          <Text style={styles.shareText}>Share Photos</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.shareButton, { backgroundColor: '#FF0000' }]}
           onPress={() => setShowShareModal(true)}
         >
-          <Ionicons name="share-social-outline" size={22} color="#fff" style={styles.shareIcon} />
-          <Text style={styles.shareText}>Share</Text>
+          <Ionicons name="share-social-outline" size={22} color="#fff" />
+          <Text style={styles.shareText}>Share Details</Text>
         </TouchableOpacity>
       </View>
       
-      {/* Floating Share Button (Flipkart style) */}
-      <Animated.View 
-        style={[
-          styles.floatingShareButton, 
-          { 
-            opacity: isFloatingButtonVisible ? 1 : 0,
-            transform: [{ scale: isFloatingButtonVisible ? 1 : 0.8 }]
-          }
-        ]}
-        pointerEvents={isFloatingButtonVisible ? 'auto' : 'none'}
-      >
-        <TouchableOpacity
-          style={styles.floatingButtonTouchable}
-          activeOpacity={0.7}
-          onPress={() => setShowShareModal(true)}
-        >
-          <Ionicons name="share-social" size={24} color="#fff" />
-        </TouchableOpacity>
-      </Animated.View>
-      
+      <PhotoShareModal />
       <ShareOptionsModal />
       <TabBar/>
     </SafeAreaView>
   );
 }
 
-// Add these new styles
 const styles = StyleSheet.create({
+  // Container styles
   container: {
     flex: 1,
     backgroundColor: '#fff',
-    marginTop: Platform.OS === 'android'? StatusBar.currentHeight : 10,
+    marginTop: Platform.OS === 'android' ? StatusBar.currentHeight : 10,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scrollView: {
     flex: 1,
@@ -483,12 +527,33 @@ const styles = StyleSheet.create({
   scrollViewContent: {
     paddingBottom: Platform.OS === 'ios' ? 90 : 70,
   },
+  discountBadge: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    backgroundColor: '#FF0000',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 4,
+  },
+  discountText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+
+  // Bottom bar styles
   bottomBar: {
+    flexDirection: 'row',
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
     backgroundColor: '#fff',
+    gap: 12,
+    marginBottom: 64,
   },
+
+  // Image styles
   mainImageContainer: {
     height: 350,
     backgroundColor: '#fff',
@@ -500,6 +565,9 @@ const styles = StyleSheet.create({
   mainImage: {
     width: '100%',
     height: '100%',
+  },
+  thumbnailScroll: {
+    backgroundColor: '#fff',
   },
   thumbnailScrollContent: {
     paddingHorizontal: 16,
@@ -525,6 +593,8 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 6,
   },
+
+  // Product info styles
   productInfo: {
     padding: 20,
     backgroundColor: '#fff',
@@ -536,27 +606,19 @@ const styles = StyleSheet.create({
     color: '#1a1a1a',
     letterSpacing: 0.5,
   },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  categoryName: {
+    fontSize: 16,
+    color: '#666',
     marginBottom: 16,
   },
-  ratingStars: {
-    flexDirection: 'row',
-    marginRight: 8,
-  },
-  starIcon: {
-    marginRight: 2,
-  },
-  rating: {
+  description: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#1a1a1a',
-  },
-  reviewCount: {
     color: '#666',
-    fontWeight: '400',
+    lineHeight: 24,
+    marginBottom: 24,
   },
+
+  // Price section styles
   priceSection: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -568,12 +630,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FF0000',
   },
-  perUnit: {
+  mrpPrice: {
     fontSize: 16,
-    fontWeight: '400',
     color: '#666',
-    marginLeft: 4,
+    textDecorationLine: 'line-through',
   },
+
+  // Stock status styles
   stockStatus: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -582,23 +645,22 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#4CAF50',
     marginRight: 6,
   },
   stockText: {
     fontSize: 14,
-    color: '#4CAF50',
     fontWeight: '500',
   },
-  thumbnailScroll: {
-    backgroundColor: '#fff',
-  },
+
+  // Section title
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 12,
     color: '#1a1a1a',
   },
+
+  // Color options styles
   colorOptions: {
     flexDirection: 'row',
     marginBottom: 24,
@@ -634,97 +696,31 @@ const styles = StyleSheet.create({
     borderColor: '#FF0000',
     transform: [{ scale: 1.05 }],
   },
-  sizeOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 24,
-  },
-  sizeOption: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 25,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    marginRight: 12,
-    marginBottom: 12,
-  },
-  selectedSize: {
-    backgroundColor: '#FF0000',
-    borderColor: '#FF0000',
-  },
-  sizeText: {
-    color: '#1a1a1a',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  selectedSizeText: {
-    color: '#fff',
-  },
-  description: {
-    fontSize: 15,
-    color: '#666',
-    lineHeight: 24,
-    marginBottom: 24,
-  },
-  priceContainer: {
-    flex: 1,
-  },
-  totalText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
-  },
-  totalPrice: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1a1a1a',
-  },
-  addToCartButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FF0000',
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderRadius: 12,
-    marginLeft: 16,
-    marginBottom: 60,
-    shadowColor: '#FF0000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  cartIcon: {
-    marginRight: 8,
-  },
-  addToCartText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+
+  // Share button styles
   shareButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FF0000',
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderRadius: 12,
-    marginLeft: 16,
-    marginBottom: 60,
-    shadowColor: '#FF0000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  shareIcon: {
-    marginRight: 8,
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
   },
   shareText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+    marginLeft: 8,
   },
+  shareIcon: {
+    marginRight: 8,
+  },
+  shareButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
   // Modal styles
   modalContainer: {
     flex: 1,
@@ -739,11 +735,7 @@ const styles = StyleSheet.create({
     padding: 24,
     width: '100%',
     maxWidth: 400,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    maxHeight: '80%',
   },
   modalTitle: {
     fontSize: 22,
@@ -751,15 +743,73 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     textAlign: 'center',
     color: '#1a1a1a',
-    letterSpacing: 0.5,
   },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 24,
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#f5f5f5',
+  },
+  modalShareButton: {
+    backgroundColor: '#FF0000',
+  },
+  cancelButtonText: {
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalShareButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  // Photo modal styles
+  photoItem: {
+    position: 'relative',
+    marginBottom: 16,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  photoPreview: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+  },
+  photoCheckbox: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#4CAF50',
+  },
+  photoCheckboxSelected: {
+    backgroundColor: '#4CAF50',
+  },
+
+  // Option row styles
   optionRow: {
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
   optionLeft: {
     flexDirection: 'row',
@@ -781,7 +831,6 @@ const styles = StyleSheet.create({
   },
   checkboxSelected: {
     backgroundColor: '#FF0000',
-    borderColor: '#FF0000',
   },
   optionText: {
     fontSize: 16,
@@ -789,40 +838,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     flex: 1,
   },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 24,
-    gap: 12,
-  },
-  modalButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  cancelButton: {
-    backgroundColor: '#f5f5f5',
-  },
-  modalShareButton: {
-    backgroundColor: '#FF0000',
-  },
-  cancelButtonText: {
-    color: '#666',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalShareButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  
-  
 });
