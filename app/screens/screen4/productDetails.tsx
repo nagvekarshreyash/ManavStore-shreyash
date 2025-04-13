@@ -53,7 +53,7 @@ export default function ProductDetails() {
     productName: true,
     price: true,
     description: true,
-    image: true,
+
     category: true,
     color: true,
   });
