@@ -100,7 +100,7 @@ export default function Products() {
   const fetchProducts = async () => {
     try {
       console.log('Fetching products for category:', categoryId);
-      const response = await fetch(`https://manavcreationbackend.onrender.com/api/v1/products/category/${categoryId}`);
+      const response = await fetch(`http://localhost:5001/api/v1/products/category/${categoryId}`);
       const data = await response.json();
       console.log('Products response:', data);
       if (data.success) {
@@ -164,8 +164,11 @@ export default function Products() {
             >
               <View style={styles.imageContainer}>
                 <Image 
-                  source={{ uri: product.colors[0].images[0] }}
-                  style={styles.productImage}
+                  source={{ 
+                    uri: product.colors[0]?.images[0],
+                    defaultSource: require('../../../assets/images/favicon.png')
+                  }}
+                  style={[styles.productImage, { width: '100%', height: '100%' }]}
                   resizeMode="cover"
                 />
               </View>
@@ -292,6 +295,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  productImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#f8f9fa',
   },
 });
 
